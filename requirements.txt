@@ -5,3 +5,4 @@ keyring
 appdirs
 lxml
 cssselect
+cryptography==2.8
