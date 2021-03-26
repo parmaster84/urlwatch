@@ -15,7 +15,7 @@ COPY setup.cfg .
 
 RUN python setup.py install
 
-RUN echo '*/30 * * * * cd /root/.urlwatch && urlwatch --urls urls.yaml --config urlwatch.yaml --hooks hooks.py --cache cache.db' | chmod 0644 /var/spool/cron/crontabs/root
+RUN echo '*/30 * * * * cd /root/.urlwatch && urlwatch --urls urls.yaml --config urlwatch.yaml --hooks hooks.py --cache cache.db' | /var/spool/cron/crontabs/root
 
 RUN chmod 0644 /var/spool/cron/crontabs/root
 
