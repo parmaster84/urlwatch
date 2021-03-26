@@ -26,4 +26,4 @@ WORKDIR /root/.urlwatch
 
 #ENTRYPOINT ["urlwatch"]
 #CMD [ "cron", "-f" ]
-CMD ["cron", "-f", "-l 8", "/dev/stdout"]
+CMD ["cron", "-f", "-L", "/dev/stdout"]
