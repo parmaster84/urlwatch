@@ -1,5 +1,7 @@
 FROM python:3.8.2
 
+USER root
+
 RUN apt-get update && apt-get install -y cron bash wget
 #CMD [ "cron", "-f" ]
 
