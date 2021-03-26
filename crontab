@@ -1,4 +1,6 @@
-SHELL=/bin/sh 
+SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-*/1 * * * * cd /root/.urlwatch && urlwatch --urls urls.yaml --config urlwatch.yaml --hooks hooks.py --cache cache.db
+*/5 * * * * cd /root/.urlwatch && urlwatch --urls urls-every-5m.yaml --config urlwatch.yaml --hooks hooks.py --cache cache.db
+*/10 * * * * cd /root/.urlwatch && urlwatch --urls urls-every-10m.yaml --config urlwatch.yaml --hooks hooks.py --cache cache.db
+*/15 * * * * cd /root/.urlwatch && urlwatch --urls urls.yaml --config urlwatch.yaml --hooks hooks.py --cache cache.db
