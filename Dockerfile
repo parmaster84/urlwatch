@@ -20,5 +20,5 @@ VOLUME /root/.urlwatch
 WORKDIR /root/.urlwatch
 
 #ENTRYPOINT ["urlwatch"]
-CMD [ "cron", "-f" ]
-#CMD ["crond", "-f", "-L", "/dev/stdout"]
+#CMD [ "cron", "-f" ]
+CMD ["cron", "-f", "-L", "/dev/stdout"]
