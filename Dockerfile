@@ -23,4 +23,5 @@ WORKDIR /root/.urlwatch
 
 #ENTRYPOINT ["urlwatch"]
 #CMD [ "cron", "-f" ]
+CMD /etc/init.d/cron restart
 CMD ["cron", "-f", "-L", "/dev/stdout"]
