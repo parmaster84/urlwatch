@@ -1,0 +1,5 @@
+SHELL=/bin/sh 
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+* * * * * root echo "HELLO!" > /proc/1/fd/1 2>&1
+*/1 * * * * cd /root/.urlwatch && urlwatch --urls urls.yaml --config urlwatch.yaml --hooks hooks.py --cache cache.db
