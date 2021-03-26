@@ -13,6 +13,10 @@ COPY setup.cfg .
 
 RUN python setup.py install
 
+RUN touch chmod 0644 /var/spool/cron/crontabs/root
+
+RUN chmod 0644 /var/spool/cron/crontabs/root
+
 RUN echo '*/30 * * * * cd /root/.urlwatch && urlwatch --urls urls.yaml --config urlwatch.yaml --hooks hooks.py --cache cache.db' | crontab -
 
 RUN chmod 0644 /var/spool/cron/crontabs/root
@@ -24,4 +28,5 @@ WORKDIR /root/.urlwatch
 
 #ENTRYPOINT ["urlwatch"]
 #CMD [ "cron", "-f" ]
-CMD ["cron", "-f", "-L", "/dev/stdout"]
+#CMD ["cron", "-f", "-L", "/dev/stdout"]
+CMD service cron start
