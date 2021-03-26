@@ -15,8 +15,9 @@ COPY setup.cfg .
 RUN python setup.py install
 
 RUN echo '*/30 * * * * cd /root/.urlwatch && urlwatch --urls urls.yaml --config urlwatch.yaml --hooks hooks.py --cache cache.db' | crontab -
-#CMD ["cron", "-f", "-L", "/dev/stdout"]
 
+VOLUME /root/.urlwatch
 WORKDIR /root/.urlwatch
 
-ENTRYPOINT ["urlwatch"]
+#ENTRYPOINT ["urlwatch"]
+CMD ["crond", "-f", "-L", "/dev/stdout"]
