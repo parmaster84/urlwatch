@@ -1,6 +1,6 @@
 #
 # This file is part of urlwatch (https://thp.io/2008/urlwatch/).
-# Copyright (c) 2008-2020 Thomas Perl <m@thp.io>
+# Copyright (c) 2008-2021 Thomas Perl <m@thp.io>
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -87,6 +87,17 @@ class ReporterBase(object, metaclass=TrackSubClasses):
         self.config = config
         self.job_states = job_states
         self.duration = duration
+
+    def get_signature(self):
+        return (
+            '{pkgname} {version}, {copyright}'.format(pkgname=urlwatch.pkgname,
+                                                      version=urlwatch.__version__,
+                                                      copyright=urlwatch.__copyright__),
+            'Website: {url}'.format(url=urlwatch.__url__),
+            'Buy me a coffee: https://ko-fi.com/thpx86',
+            'watched {count} URLs in {duration} seconds'.format(count=len(self.job_states),
+                                                                duration=self.duration.seconds),
+        )
 
     def convert(self, othercls):
         if hasattr(othercls, '__kind__'):
@@ -190,29 +201,23 @@ class HtmlReporter(ReporterBase):
 
             yield SafeHtml('<hr>')
 
-        yield SafeHtml("""
-        <address>
-        {pkgname} {version}, {copyright}<br>
-        Website: {url}<br>
-        watched {count} URLs in {duration} seconds
-        </address>
+        yield SafeHtml('<address>')
+        for part in self.get_signature():
+            yield SafeHtml('{}<br>').format(part)
+        yield SafeHtml("""</address>
         </body>
         </html>
-        """).format(pkgname=urlwatch.pkgname, version=urlwatch.__version__, copyright=urlwatch.__copyright__,
-                    url=urlwatch.__url__, count=len(self.job_states), duration=self.duration.seconds)
+        """)
 
     def _diff_to_html(self, unified_diff):
-        for line in unified_diff.splitlines():
-            if line.startswith('+'):
-                yield SafeHtml('<span class="unified_add">{line}</span>').format(line=line)
-            elif line.startswith('-'):
-                yield SafeHtml('<span class="unified_sub">{line}</span>').format(line=line)
-            else:
-                # Basic colorization for wdiff-style differences
-                line = SafeHtml('<span class="unified_nor">{line}</span>').format(line=line)
-                line = re.sub(WDIFF_ADDED_RE, lambda x: '<span class="diff_add">' + x.group(0) + '</span>', line)
-                line = re.sub(WDIFF_REMOVED_RE, lambda x: '<span class="diff_sub">' + x.group(0) + '</span>', line)
-                yield line
+        result = unified_diff
+        diff_mapping = {'+': 'unified_add', '-': 'unified_sub'}
+
+        result = re.sub(r'^([-+]).*$', lambda x: '<span class="' + diff_mapping[x.group(1)] + '">' + x.group(0) + '</span>', result, flags=re.MULTILINE)
+        result = re.sub(WDIFF_ADDED_RE, lambda x: '<span class="diff_add">' + x.group(0) + '</span>', result, flags=re.MULTILINE + re.DOTALL)
+        result = re.sub(WDIFF_REMOVED_RE, lambda x: '<span class="diff_sub">' + x.group(0) + '</span>', result, flags=re.MULTILINE + re.DOTALL)
+
+        return str(SafeHtml('<span class="unified_nor">' + result + '</span>')).splitlines()
 
     def _format_content(self, job_state, difftype):
         if job_state.verb == 'error':
@@ -276,10 +281,8 @@ class TextReporter(ReporterBase):
             yield from details
 
         if summary and show_footer:
-            yield from ('-- ',
-                        '%s %s, %s' % (urlwatch.pkgname, urlwatch.__version__, urlwatch.__copyright__),
-                        'Website: %s' % (urlwatch.__url__,),
-                        'watched %d URLs in %d seconds' % (len(self.job_states), self.duration.seconds))
+            yield '-- '
+            yield from self.get_signature()
 
     def _format_content(self, job_state):
         if job_state.verb == 'error':
@@ -746,10 +749,7 @@ class MarkdownReporter(ReporterBase):
             details.extend(details_part)
 
         if summary and show_footer:
-            footer = ('--- ',
-                      '%s %s, %s  ' % (urlwatch.pkgname, urlwatch.__version__, urlwatch.__copyright__),
-                      'Website: %s  ' % (urlwatch.__url__,),
-                      'watched %d URLs in %d seconds' % (len(self.job_states), self.duration.seconds))
+            footer = ('--- ',) + self.get_signature()
         else:
             footer = None
 
@@ -978,3 +978,63 @@ class XMPPReporter(TextReporter):
 
         for chunk in chunkstring(text, self.MAX_LENGTH, numbering=True):
             asyncio.run(xmpp.send(chunk))
+
+
+class ProwlReporter(TextReporter):
+    """Send a detailed notification via prowlapp.com"""
+
+    __kind__ = 'prowl'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def submit(self):
+        api_add = 'https://api.prowlapp.com/publicapi/add'
+
+        text = '\n'.join(super().submit())
+
+        if not text:
+            logger.debug('Not calling Prowl API (no changes)')
+            return
+
+        filtered_job_states = list(self.report.get_filtered_job_states(self.job_states))
+        subject_args = {
+            'count': len(filtered_job_states),
+            'jobs': ', '.join(job_state.job.pretty_name() for job_state in filtered_job_states),
+        }
+
+        # 'subject' used in the config file, but the API
+        # uses what might be called the subject as the 'event'
+        event = self.config['subject'].format(**subject_args)
+
+        # 'application' is prepended to the message in prowl,
+        # to show the source of the notification. this too,
+        # is user configurable, and may reference subject args
+        application = self.config.get('application')
+        if application is not None:
+            application = application.format(**subject_args)
+        else:
+            application = '{0} v{1}'.format(urlwatch.pkgname, urlwatch.__version__)
+
+        # build the data to post
+        post_data = {
+            'event': event[:1024].encode('utf8'),
+            'description': text[:10000].encode('utf8'),
+            'application': application[:256].encode('utf8'),
+            'apikey': self.config['api_key'],
+            'priority': self.config['priority']
+        }
+
+        # all set up, add the notification!
+        result = requests.post(api_add, data=post_data)
+
+        try:
+            if result.status_code in (requests.codes.ok, requests.codes.no_content):
+                logger.info("Prowl response: ok")
+            else:
+                logger.error("Prowl error: {0}".format(result.text))
+        except ValueError:
+            logger.error("Failed to parse Prowl response. HTTP status code: {0}, content: {1}".format(
+                result.status_code, result.content))
+
+        return result

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of urlwatch (https://thp.io/2008/urlwatch/).
-# Copyright (c) 2008-2020 Thomas Perl <m@thp.io>
+# Copyright (c) 2008-2021 Thomas Perl <m@thp.io>
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -44,6 +44,8 @@ from enum import Enum
 from lxml import etree
 from lxml.cssselect import CSSSelector
 
+from xml.dom import minidom
+
 from .util import TrackSubClasses, import_module_from_source
 
 from .html2txt import html2text
@@ -78,6 +80,11 @@ try:
     from PIL import Image
 except ImportError:
     Image = None
+
+try:
+    import jq
+except ImportError:
+    jq = None
 
 logger = logging.getLogger(__name__)
 
@@ -374,6 +381,22 @@ class JsonFormatFilter(FilterBase):
         indentation = int(subfilter.get('indentation', 4))
         parsed_json = json.loads(data)
         return json.dumps(parsed_json, ensure_ascii=False, sort_keys=True, indent=indentation, separators=(',', ': '))
+
+
+class PrettyXMLFilter(FilterBase):
+    """Pretty-print XML"""
+
+    __kind__ = 'pretty-xml'
+
+    __supported_subfilters__ = {
+        'indentation': 'Indentation level for pretty-printing',
+    }
+
+    __default_subfilter__ = 'indentation'
+
+    def filter(self, data, subfilter):
+        indentation = int(subfilter.get('indentation', 2))
+        return minidom.parseString(data).toprettyxml(indent=' ' * indentation)
 
 
 class GrepFilter(FilterBase):
@@ -855,3 +878,30 @@ class OCRFilter(FilterBase):
             raise ImportError('Please install Pillow/PIL')
 
         return pytesseract.image_to_string(Image.open(io.BytesIO(data)), lang=language, timeout=timeout)
+
+
+class JQFilter(FilterBase):
+    """Parse, transform, and extract data from json as text using `jq`"""
+
+    __kind__ = 'jq'
+
+    __supported_subfilters__ = {
+        'query': 'jq query function to execute on data',
+    }
+
+    __default_subfilter__ = 'query'
+
+    def filter(self, data, subfilter):
+
+        try:
+            jsondata = json.loads(data)
+        except ValueError:
+            raise ValueError('The url response contained invalid JSON')
+
+        if 'query' not in subfilter:
+            raise ValueError('{} filter needs a query'.format(self.__kind__))
+
+        if jq is None:
+            raise ImportError('Please install jq')
+
+        return jq.text(subfilter['query'], jsondata)
